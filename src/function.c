@@ -1047,7 +1047,7 @@ func_filter_filterout (char *o, char **argv, const char *funcname)
               wp = hash_find_item (&a_word_table, &a_word_key);
               while (wp)
                 {
-                  wp->matched |= 1;
+                  wp->matched = 1;
                   wp = wp->chain;
                 }
             }
@@ -1061,7 +1061,7 @@ func_filter_filterout (char *o, char **argv, const char *funcname)
       for (wp = wordhead; wp != 0; wp = wp->next)
         if (is_filter ? wp->matched : !wp->matched)
           {
-            o = variable_buffer_output (o, wp->str, strlen (wp->str));
+            o = variable_buffer_output (o, wp->str, wp->length);
             o = variable_buffer_output (o, " ", 1);
             doneany = 1;
           }
@@ -1117,23 +1117,26 @@ func_error (char *o, char **argv, const char *funcname)
   char *msg, *p;
   size_t len;
 
-  /* The arguments will be broken on commas.  Rather than create yet
-     another special case where function arguments aren't broken up,
-     just create a format string that puts them back together.  */
-  for (len=0, argvp=argv; *argvp != 0; ++argvp)
-    len += strlen (*argvp) + 2;
-
-  p = msg = alloca (len + 1);
-  msg[0] = '\0';
-
-  for (argvp=argv; argvp[1] != 0; ++argvp)
+  msg = argv[0];
+  if (argv[1] != 0)
     {
+      /* The arguments will be broken on commas.  Rather than create yet
+         another special case where function arguments aren't broken up,
+         just create a format string that puts them back together.  */
+      for (len=0, argvp=argv; *argvp != 0; ++argvp)
+        len += strlen (*argvp) + 2;
+
+      p = msg = alloca (len + 1);
+
+      for (argvp=argv; argvp[1] != 0; ++argvp)
+        {
+          strcpy (p, *argvp);
+          p += strlen (*argvp);
+          *(p++) = ',';
+          *(p++) = ' ';
+        }
       strcpy (p, *argvp);
-      p += strlen (*argvp);
-      *(p++) = ',';
-      *(p++) = ' ';
     }
-  strcpy (p, *argvp);
 
   switch (*funcname)
     {
@@ -1165,7 +1168,6 @@ static char *
 func_sort (char *o, char **argv, const char *funcname UNUSED)
 {
   const char *t;
-  char **words;
   int wordi;
   char *p;
   size_t len;
@@ -1179,21 +1181,22 @@ func_sort (char *o, char **argv, const char *funcname UNUSED)
       ++wordi;
     }
 
-  words = xmalloc ((wordi == 0 ? 1 : wordi) * sizeof (char *));
-
-  /* Now assign pointers to each string in the array.  */
-  t = argv[0];
-  wordi = 0;
-  while ((p = find_next_token (&t, &len)) != 0)
-    {
-      ++t;
-      p[len] = '\0';
-      words[wordi++] = p;
-    }
-
   if (wordi)
     {
+      char **words;
       int i;
+
+      words = xmalloc (wordi * sizeof (char *));
+
+      /* Now assign pointers to each string in the array.  */
+      t = argv[0];
+      wordi = 0;
+      while ((p = find_next_token (&t, &len)) != 0)
+        {
+          ++t;
+          p[len] = '\0';
+          words[wordi++] = p;
+        }
 
       /* Now sort the list of words.  */
       qsort (words, wordi, sizeof (char *), alpha_compare);
@@ -1212,9 +1215,8 @@ func_sort (char *o, char **argv, const char *funcname UNUSED)
 
       /* Kill the last space.  */
       --o;
+      free (words);
     }
-
-  free (words);
 
   return o;
 }
