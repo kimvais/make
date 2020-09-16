@@ -213,8 +213,8 @@ int question_flag = 0;
 
 /* Nonzero means do not use any of the builtin rules (-r) / variables (-R).  */
 
-int no_builtin_rules_flag = 0;
-int no_builtin_variables_flag = 0;
+int no_builtin_rules_flag = 1;
+int no_builtin_variables_flag = 1;
 
 /* Nonzero means keep going even if remaking some file fails (-k).  */
 
@@ -308,7 +308,7 @@ static int print_usage_flag = 0;
 /* If nonzero, we should print a warning message
    for each reference to an undefined variable.  */
 
-int warn_undefined_variables_flag;
+int warn_undefined_variables_flag = 1;
 
 static char *warn_undefined_variables_option = 0;
 
