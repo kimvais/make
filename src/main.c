@@ -310,6 +310,8 @@ static int print_usage_flag = 0;
 
 int warn_undefined_variables_flag;
 
+static char *warn_undefined_variables_option = 0;
+
 /* If nonzero, always build all targets, regardless of whether
    they appear out of date or not.  */
 
@@ -409,7 +411,8 @@ static const char *const usage[] =
   -W FILE, --what-if=FILE, --new-file=FILE, --assume-new=FILE\n\
                               Consider FILE to be infinitely new.\n"),
     N_("\
-  --warn-undefined-variables  Warn when an undefined variable is referenced.\n"),
+  --warn-undefined-variables[=TYPE]\n\
+                              Warn when an undefined variable is referenced.\n"),
     NULL
   };
 
@@ -463,7 +466,7 @@ static const struct command_switch switches[] =
     { CHAR_MAX+3, flag, &trace_flag, 1, 1, 0, 0, 0, "trace" },
     { CHAR_MAX+4, flag_off, &print_directory_flag, 1, 1, 0, 0,
       &default_print_directory_flag, "no-print-directory" },
-    { CHAR_MAX+5, flag, &warn_undefined_variables_flag, 1, 1, 0, 0, 0,
+    { CHAR_MAX+5, flag, &warn_undefined_variables_flag, 1, 1, 0, "noargs", 0,
       "warn-undefined-variables" },
     { CHAR_MAX+7, string, &sync_mutex, 1, 1, 0, 0, 0, "sync-mutex" },
     { CHAR_MAX+8, flag_off, &silent_flag, 1, 1, 0, 0, &default_silent_flag,
@@ -802,6 +805,24 @@ decode_output_sync_flags (void)
   if (sync_mutex)
     RECORD_SYNC_MUTEX (sync_mutex);
 #endif
+}
+
+static void
+decode_warn_undefined_flags (void)
+{
+  if (warn_undefined_variables_option)
+    {
+      if (streq (warn_undefined_variables_option, "all"))
+        warn_undefined_variables_flag = WARN_UNDEFINED_BASE | WARN_UNDEFINED_ARGS;
+      else if (streq (warn_undefined_variables_option, "noargs"))
+        warn_undefined_variables_flag = WARN_UNDEFINED_BASE;
+      else if (streq (warn_undefined_variables_option, "args"))
+        warn_undefined_variables_flag = WARN_UNDEFINED_ARGS;
+      else
+        OS (fatal, NILF,
+            _("unknown warn-undefined-variables type '%s'"),
+            warn_undefined_variables_option);
+    }
 }
 
 #ifdef WINDOWS32
@@ -3023,6 +3044,7 @@ decode_switches (int argc, const char **argv, int env)
   /* If there are any options that need to be decoded do it now.  */
   decode_debug_flags ();
   decode_output_sync_flags ();
+  decode_warn_undefined_flags ();
 
   /* Perform any special switch handling.  */
   run_silent = silent_flag;

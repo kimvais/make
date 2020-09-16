@@ -1866,3 +1866,22 @@ sync_Path_environment (void)
   free (path);
 }
 #endif
+
+void
+show_undefined_variable_warn (const char *name, size_t length)
+{
+  if (!(warn_undefined_variables_flag & WARN_UNDEFINED_BASE) ||
+      !(warn_undefined_variables_flag & WARN_UNDEFINED_ARGS))
+    {
+      /* $(call ...) arguments are named as $1,$2,$3 and so on,
+         check if variable name is numeric.  */
+      size_t i;
+      for (i = 0; i < length && ISDIGIT(name[i]); ++i);
+
+      if ((i == length && !(warn_undefined_variables_flag & WARN_UNDEFINED_ARGS)) ||
+          (i != length && !(warn_undefined_variables_flag & WARN_UNDEFINED_BASE)))
+          return;
+    }
+  error (reading_file, length, _("warning: undefined variable '%.*s'"),
+         (int)(length), name);
+}
