@@ -645,6 +645,11 @@ process_begin(
                                 &bytes_returned, 0) == FALSE || bytes_returned < 2) {
 
                         pproc->last_err = GetLastError();
+                        if (!pproc->last_err) {
+                                fprintf (stderr, "ReadFile failed to read more than 2 bytes of input (read %d bytes from %s).\n",
+                                         bytes_returned, exec_fname);
+                                pproc->last_err = ERROR_BAD_FORMAT;
+                        }
                         pproc->lerrno = E_IO;
                         CloseHandle(exec_handle);
                         return(-1);
