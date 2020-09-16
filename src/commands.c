@@ -475,6 +475,12 @@ execute_file_commands (struct file *file)
   /* Start the commands running.  */
   new_job (file);
 }
+
+#ifdef WINDOWS32
+/* defined in job.c */
+extern void wait_until_main_thread_sleeps (void);
+#endif
+
 
 /* This is set while we are inside fatal_error_signal,
    so things can avoid nonreentrant operations.  */
@@ -511,20 +517,7 @@ fatal_error_signal (int sig)
   /* Windows creates a separate thread for handling Ctrl+C, so we need
      to suspend the main thread, or else we will have race conditions
      when both threads call reap_children.  */
-  if (main_thread)
-    {
-      DWORD susp_count = SuspendThread (main_thread);
-
-      if (susp_count != 0)
-        fprintf (stderr, "SuspendThread: suspend count = %ld\n", susp_count);
-      else if (susp_count == (DWORD)-1)
-        {
-          DWORD ierr = GetLastError ();
-
-          fprintf (stderr, "SuspendThread: error %ld: %s\n",
-                   ierr, map_windows32_error_to_string (ierr));
-        }
-    }
+  wait_until_main_thread_sleeps();
 #endif
   handling_fatal_signal = 1;
 
@@ -588,8 +581,6 @@ fatal_error_signal (int sig)
 #endif
 
 #ifdef WINDOWS32
-  if (main_thread)
-    CloseHandle (main_thread);
   /* Cannot call W32_kill with a pid (it needs a handle).  The exit
      status of 130 emulates what happens in Bash.  */
   exit (130);

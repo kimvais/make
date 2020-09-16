@@ -36,7 +36,6 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 const char *default_shell = "sh.exe";
 int no_default_sh_exe = 1;
 int batch_mode_shell = 1;
-HANDLE main_thread;
 
 #elif defined (_AMIGA)
 
@@ -608,6 +607,77 @@ child_handler (int sig UNUSED)
 #endif
 }
 
+#ifdef WINDOWS32
+
+/* If non-zero, then Main thread should release resources and go to sleep.  */
+int main_thread_should_sleep = 0;
+
+/* Event object on which Ctrl-C handler thread will wait
+   until Main thread unlocks resources.  */
+static HANDLE susp_main_event = NULL;
+
+void create_susp_main_event (void)
+{
+  susp_main_event = CreateEvent(
+    NULL,  /* The handle cannot be inherited by child processes */
+    FALSE, /* Manual-reset */
+    FALSE, /* Initial state */
+    NULL   /* Name of the event object */
+  );
+
+  if (susp_main_event == NULL)
+    {
+      DWORD e = GetLastError ();
+      fprintf (stderr,
+               "Failed to create event object (Error %ld: %s)\n",
+               e, map_windows32_error_to_string (e));
+    }
+}
+
+void delete_susp_main_event (void)
+{
+  CloseHandle(susp_main_event);
+}
+
+/* If Main thread needs to be suspended, by calling this function, it
+   will wakeup Ctrl-C handler thread and then will go to infinite sleep.  */
+static void check_need_sleep (void)
+{
+  /* Ctrl-C handler thread sets this flag only after suspending Main thread,
+     so if flag is set, then calling thread is not the Main thread.  */
+  if (handling_fatal_signal)
+    return;
+
+  /* Check if Ctrl-C handler thread waits to suspend main thread.  */
+  if (main_thread_should_sleep)
+    {
+      SetEvent (susp_main_event);
+      Sleep (INFINITE);
+    }
+}
+
+/* Called by Ctrl-C handler thread:
+  wait until main thread releases resources and goes to sleep.  */
+void wait_until_main_thread_sleeps (void)
+{
+  DWORD result;
+
+  /* Tell Main thread that it should go to sleep.  */
+  main_thread_should_sleep = 1;
+
+  /* And wait for it */
+  result = WaitForSingleObject(susp_main_event, INFINITE);
+  if (WAIT_OBJECT_0 != result)
+    {
+      DWORD e = GetLastError ();
+      fprintf (stderr,
+               "Failed to wait to suspend main thread (Error %ld: %s)\n",
+               e, map_windows32_error_to_string (e));
+    }
+}
+
+#endif /* WINDOWS32 */
+
 extern pid_t shell_function_pid;
 
 /* Reap all dead children, storing the returned status and the new command
@@ -650,6 +720,11 @@ reap_children (int block, int err)
       int child_failed;
       int any_remote, any_local;
       int dontcare;
+
+#ifdef WINDOWS32
+      /* Check if Main thread should go to sleep.  */
+      check_need_sleep ();
+#endif
 
       if (err && block)
         {
@@ -816,24 +891,6 @@ reap_children (int block, int err)
             exit_sig = 0;
             coredump = 0;
 
-            /* Record the thread ID of the main process, so that we
-               could suspend it in the signal handler.  */
-            if (!main_thread)
-              {
-                hcTID = GetCurrentThread ();
-                hcPID = GetCurrentProcess ();
-                if (!DuplicateHandle (hcPID, hcTID, hcPID, &main_thread, 0,
-                                      FALSE, DUPLICATE_SAME_ACCESS))
-                  {
-                    DWORD e = GetLastError ();
-                    fprintf (stderr,
-                             "Determine main thread ID (Error %ld: %s)\n",
-                             e, map_windows32_error_to_string (e));
-                  }
-                else
-                  DB (DB_VERBOSE, ("Main thread handle = %p\n", main_thread));
-              }
-
             /* wait for anything to finish */
             hPID = process_wait_for_any (block, &dwWaitStatus);
             if (hPID)
@@ -997,7 +1054,13 @@ reap_children (int block, int err)
           /* If there are more commands to run, try to start them.  */
           if (job_next_command (c))
             {
-              if (handling_fatal_signal)
+              int dying = handling_fatal_signal;
+#ifdef WINDOWS32
+              /* Check if Ctrl-C handler thread waits to kill jobs.  */
+              if (main_thread_should_sleep)
+                dying = 1;
+#endif
+              if (dying)
                 {
                   /* Never start new commands while we are dying.
                      Since there are more commands that wanted to be run,

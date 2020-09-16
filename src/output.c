@@ -245,6 +245,19 @@ pump_from_tmp (int from, FILE *to)
           break;
         }
       fflush (to);
+#ifdef WINDOWS32
+      /* Check if Make was interrupted.  */
+      {
+        extern int main_thread_should_sleep;
+        if (main_thread_should_sleep)
+          {
+            /* If output is not redirected to file - stop writing,
+               because writing to windows console is too slow.  */
+            if (-1l == ftell (to))
+              break;
+          }
+      }
+#endif
     }
 
 #ifdef WINDOWS32

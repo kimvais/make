@@ -264,6 +264,12 @@ static const int inf_jobs = 0;
 
 static char *jobserver_auth = NULL;
 
+#ifdef WINDOWS32
+/* defined in job.c */
+extern void create_susp_main_event (void);
+extern void delete_susp_main_event (void);
+#endif
+
 /* Handle for the mutex used on Windows to synchronize output of our
    children under -O.  */
 
@@ -1065,6 +1071,7 @@ main (int argc, char **argv, char **envp)
   const char *windows32_path = NULL;
 
   SetUnhandledExceptionFilter (handle_runtime_exceptions);
+  create_susp_main_event ();
 
   /* start off assuming we have no shell */
   unixy_shell = 0;
@@ -3512,6 +3519,10 @@ die (int status)
           int _x UNUSED;
           _x = chdir (directory_before_chdir);
         }
+
+#ifdef WINDOWS32
+      delete_susp_main_event ();
+#endif
     }
 
   exit (status);
