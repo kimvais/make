@@ -1243,7 +1243,11 @@ do_variable_definition (const floc *flocp, const char *varname,
          The value is set IFF the variable is not defined yet. */
       v = lookup_variable (varname, strlen (varname));
       if (v)
-        goto done;
+        {
+          if (v->origin == o_env)
+            warn_env (v->name, v->length);
+          goto done;
+        }
 
       conditional = 1;
       flavor = f_recursive;
@@ -1276,6 +1280,9 @@ do_variable_definition (const floc *flocp, const char *varname,
           {
             /* There was no old value.
                This becomes a normal recursive definition.  */
+            if (strcmp(".INCLUDE_DIRS", varname))
+              warn_undefined (varname, strlen (varname));
+
             p = value;
             flavor = f_recursive;
           }
@@ -1286,6 +1293,9 @@ do_variable_definition (const floc *flocp, const char *varname,
             size_t oldlen, vallen;
             const char *val;
             char *tp = NULL;
+
+            if (v->origin == o_env)
+              warn_env (v->name, v->length);
 
             val = value;
             if (v->recursive)
@@ -1574,9 +1584,17 @@ parse_variable_definition (const char *p, struct variable *var)
                 var->flavor = f_append;
                 break;
               case '?':
+                error (reading_file,
+                  (int)((e ? e : p - 1) - var->name),
+                  _("warning: conditionally-defined variable '%.*s'"),
+                  (int)((e ? e : p - 1) - var->name), var->name);
                 var->flavor = f_conditional;
                 break;
               case '!':
+                error (reading_file,
+                  (int)((e ? e : p - 1) - var->name),
+                  _("warning: shell-defined variable '%.*s'"),
+                  (int)((e ? e : p - 1) - var->name), var->name);
                 var->flavor = f_shell;
                 break;
               default:

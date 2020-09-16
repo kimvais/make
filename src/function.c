@@ -501,12 +501,20 @@ func_flavor (char *o, char **argv, const char *funcname UNUSED)
   struct variable *v = lookup_variable (argv[0], strlen (argv[0]));
 
   if (v == 0)
-    o = variable_buffer_output (o, "undefined", 9);
+    {
+      warn_undefined (argv[0], strlen (argv[0]));
+      o = variable_buffer_output (o, "undefined", 9);
+    }
   else
-    if (v->recursive)
-      o = variable_buffer_output (o, "recursive", 9);
-    else
-      o = variable_buffer_output (o, "simple", 6);
+    {
+      if (v->origin == o_env)
+        warn_env (v->name, v->length);
+
+      if (v->recursive)
+        o = variable_buffer_output (o, "recursive", 9);
+      else
+        o = variable_buffer_output (o, "simple", 6);
+    }
 
   return o;
 }
@@ -1423,7 +1431,14 @@ func_value (char *o, char **argv, const char *funcname UNUSED)
 
   /* Copy its value into the output buffer without expanding it.  */
   if (v)
-    o = variable_buffer_output (o, v->value, strlen (v->value));
+    {
+      if (v->origin == o_env)
+        warn_env (v->name, v->length);
+
+      o = variable_buffer_output (o, v->value, strlen (v->value));
+    }
+  else
+    warn_undefined (argv[0], strlen (argv[0]));
 
   return o;
 }
@@ -2600,6 +2615,8 @@ func_call (char *o, char **argv, const char *funcname UNUSED)
 
   if (v == 0)
     warn_undefined (fname, flen);
+  else if (v->origin == o_env)
+    warn_env (v->name, v->length);
 
   if (v == 0 || *v->value == '\0')
     return o;

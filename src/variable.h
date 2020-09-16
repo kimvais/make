@@ -245,6 +245,14 @@ void show_undefined_variable_warn (const char *name, size_t length);
                                 show_undefined_variable_warn (n, l);    \
                               }while(0)
 
+/* Warn that NAME is an environment-defined variable .  */
+
+#define warn_env(n,l) do{\
+                                error (reading_file, (l),               \
+                                       _("warning: using environment variable '%.*s'"), \
+                                       (int)(l), (n));                  \
+                              }while(0)
+
 char **target_environment (struct file *file);
 
 struct pattern_var *create_pattern_var (const char *target,

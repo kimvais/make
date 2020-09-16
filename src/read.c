@@ -813,7 +813,13 @@ eval (struct ebuffer *ebuf, int set_default)
                 {
                   struct variable *v = lookup_variable (p, l);
                   if (v == 0)
-                    v = define_variable_global (p, l, "", o_file, 0, fstart);
+                    {
+                      warn_undefined (p, l);
+                      v = define_variable_global (p, l, "", o_file, 0, fstart);
+                    }
+                  else if (v->origin == o_env && exporting)
+                    warn_env (v->name, v->length);
+
                   v->export = exporting ? v_export : v_noexport;
                 }
 
@@ -1717,6 +1723,10 @@ conditional_line (char *line, size_t len, const floc *flocp)
 
       var[l] = '\0';
       v = lookup_variable (var, l);
+      if (v == 0)
+        warn_undefined (var, l);
+      else if (v->origin == o_env)
+        warn_env (v->name, v->length);
 
       conditionals->ignoring[o] =
         ((v != 0 && *v->value != '\0') == (cmdtype == c_ifndef));

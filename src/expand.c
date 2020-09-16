@@ -151,6 +151,8 @@ recursively_expand_for_file (struct variable *v, struct file *file)
   return value;
 }
 
+#define CMPSTR(n,l,c) ( sizeof(c "") - 1 == (l) && memcmp(n, c, sizeof(c "") - 1) == 0 )
+
 /* Expand a simple reference to variable NAME, which is LENGTH chars long.  */
 
 #ifdef __GNUC__
@@ -165,7 +167,22 @@ reference_variable (char *o, const char *name, size_t length)
   v = lookup_variable (name, length);
 
   if (v == 0)
-    warn_undefined (name, length);
+    {
+      if (
+        !CMPSTR(name, length, "GNUMAKEFLAGS") &&
+        !CMPSTR(name, length, "MAKEFLAGS"))
+        {
+          warn_undefined (name, length);
+        }
+    }
+  else if (v->origin == o_env &&
+    strcmp("GNUMAKEFLAGS", v->name) &&
+    strcmp("MAKEOVERRIDES", v->name) &&
+    strcmp("MAKEFLAGS", v->name) &&
+    strcmp("MAKELEVEL", v->name))
+    {
+      warn_env (v->name, v->length);
+    }
 
   /* If there's no variable by that name or it has no value, stop now.  */
   if (v == 0 || (*v->value == '\0' && !v->append))
@@ -340,6 +357,8 @@ variable_expand_string (char *line, const char *string, size_t length)
                     v = lookup_variable (beg, colon - beg);
                     if (v == 0)
                       warn_undefined (beg, colon - beg);
+                    else if (v->origin == o_env)
+                      warn_env (v->name, v->length);
 
                     /* If the variable is not empty, perform the
                        substitution.  */
