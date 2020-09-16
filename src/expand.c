@@ -497,7 +497,7 @@ variable_append (const char *name, size_t length,
     return initialize_variable_output ();
 
   /* If this set is local and the next is not a parent, then next is local.  */
-  nextlocal = local && set->next_is_parent == 0;
+  nextlocal = local && set->mark != NEXT_IS_PARENT;
 
   /* Try to find the variable in this variable set.  */
   v = lookup_variable_in_set (name, length, set->set);

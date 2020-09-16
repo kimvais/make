@@ -2569,6 +2569,7 @@ func_call (char *o, char **argv, const char *funcname UNUSED)
   int saved_args;
   const struct function_table_entry *entry_p;
   struct variable *v;
+  struct variable_set_list *setlist;
 
   /* Clean up the name of the variable to be invoked.  */
   fname = next_token (argv[0]);
@@ -2610,7 +2611,7 @@ func_call (char *o, char **argv, const char *funcname UNUSED)
 
   /* Set up arguments $(1) .. $(N).  $(0) is the function name.  */
 
-  push_new_variable_scope ();
+  setlist = push_new_variable_scope ();
 
   for (i=0; *argv; ++i, ++argv)
     {
@@ -2620,30 +2621,27 @@ func_call (char *o, char **argv, const char *funcname UNUSED)
       define_variable (num, strlen (num), *argv, o_automatic, 0);
     }
 
-  /* If the number of arguments we have is < max_args, it means we're inside
-     a recursive invocation of $(call ...).  Fill in the remaining arguments
-     in the new scope with the empty value, to hide them from this
-     invocation.  */
+  /* Adjust max_args - the maximum number of arguments among calls of
+     user-defined functions in the call stack up to and including this
+     $(call ...) invocation.  */
+  saved_args = max_args;
+  if (i > max_args)
+    max_args = i;
 
-  for (; i < max_args; ++i)
-    {
-      char num[11];
-
-      sprintf (num, "%d", i);
-      define_variable (num, strlen (num), "", o_automatic, 0);
-    }
+  /* Mark the list with max_args - the mark is checked while looking up
+     variables in outer scope: if variable name looks like a user-defined
+     function call argument, e.g. $(123), and it's decimal value is less
+     than the mark, then the variable must not be found.  */
+  setlist->mark = max_args;
 
   /* Expand the body in the context of the arguments, adding the result to
      the variable buffer.  */
 
   v->exp_count = EXP_COUNT_MAX;
-
-  saved_args = max_args;
-  max_args = i;
   o = variable_expand_string (o, body, flen+3);
-  max_args = saved_args;
-
   v->exp_count = 0;
+
+  max_args = saved_args;
 
   pop_variable_scope ();
 

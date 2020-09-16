@@ -94,7 +94,19 @@ struct variable_set_list
   {
     struct variable_set_list *next;     /* Link in the chain.  */
     struct variable_set *set;           /* Variable set.  */
-    int next_is_parent;                 /* True if next is a parent target.  */
+
+    /* Mark of the list:
+      -1 - next is a parent target;
+       0 - list is not marked;
+      >0 - variable set of the list contains arguments of user-defined function
+           call.  Mark value - is the maximum number of arguments among calls
+           of user-defined functions in the call stack up to and including this
+           list.  Function name (passed as $0 argument) is always counted, so
+           number of arguments cannot be zero.  */
+
+#define NEXT_IS_PARENT -1
+
+    int mark;
   };
 
 /* Structure used for pattern-specific variables.  */

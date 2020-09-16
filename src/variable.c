@@ -457,6 +457,7 @@ lookup_variable (const char *name, size_t length)
   const struct variable_set_list *setlist;
   struct variable var_key;
   int is_parent = 0;
+  int maybe_argument = 1;
 
   var_key.name = (char *) name;
   var_key.length = (unsigned int) length;
@@ -471,7 +472,45 @@ lookup_variable (const char *name, size_t length)
       if (v && (!is_parent || !v->private_var))
         return v->special ? lookup_special_var (v) : v;
 
-      is_parent |= setlist->next_is_parent;
+      /* Variable was not found.  Check if it looks like a function call
+         argument: $1,$2,$3...  If it is and we are in the context of user
+         function call, then we must not take arguments of outer functions.  */
+
+      if (setlist->mark == NEXT_IS_PARENT)
+        is_parent = 1;
+      else if (setlist->mark && maybe_argument)
+        {
+          /* Argument $0 is always defined and must be found,
+             names of other arguments do not begin with '0' */
+          if ('0' != *name)
+            {
+              /* Try to parse decimal number.  Check for integer overflow.
+                 If parsing failed or the number is greater or equal to the
+                 maximum number of arguments among calls of user-defined
+                 functions in the call stack, then the variable is not a
+                 function argument.  */
+              int number = 0, a;
+              const int m = setlist->mark/10;
+              size_t i;
+              for (i = 0; i < length; i++)
+                {
+                  if (!ISDIGIT(name[i]))
+                    break;
+                  if (number > m)
+                    break;
+                  number *= 10;
+                  a = name[i] - '0';
+                  if (a >= setlist->mark - number)
+                    break;
+                  number += a;
+                }
+
+              if (i == length)
+                return 0;
+            }
+
+          maybe_argument = 0;
+        }
     }
 
 #ifdef VMS
@@ -583,7 +622,7 @@ initialize_file_variables (struct file *file, int reading)
     {
       initialize_file_variables (file->double_colon, reading);
       l->next = file->double_colon->variables;
-      l->next_is_parent = 0;
+      l->mark = 0;
       return;
     }
 
@@ -594,7 +633,7 @@ initialize_file_variables (struct file *file, int reading)
       initialize_file_variables (file->parent, reading);
       l->next = file->parent->variables;
     }
-  l->next_is_parent = 1;
+  l->mark = NEXT_IS_PARENT;
 
   /* If we're not reading makefiles and we haven't looked yet, see if
      we can find pattern variables for this target.  */
@@ -654,9 +693,9 @@ initialize_file_variables (struct file *file, int reading)
   if (file->pat_variables != 0)
     {
       file->pat_variables->next = l->next;
-      file->pat_variables->next_is_parent = l->next_is_parent;
+      file->pat_variables->mark = l->mark;
       l->next = file->pat_variables;
-      l->next_is_parent = 0;
+      l->mark = 0;
     }
 }
 
@@ -677,7 +716,7 @@ create_new_variable_set (void)
     xmalloc (sizeof (struct variable_set_list));
   setlist->set = set;
   setlist->next = current_variable_set_list;
-  setlist->next_is_parent = 0;
+  setlist->mark = 0;
 
   return setlist;
 }
@@ -699,9 +738,11 @@ push_new_variable_scope (void)
          pointing to &global  */
       struct variable_set *set = current_variable_set_list->set;
       current_variable_set_list->set = global_setlist.set;
-      global_setlist.set = set;
       current_variable_set_list->next = global_setlist.next;
+      current_variable_set_list->mark = global_setlist.mark;
+      global_setlist.set = set;
       global_setlist.next = current_variable_set_list;
+      global_setlist.mark = 0;
       current_variable_set_list = &global_setlist;
     }
   return (current_variable_set_list);
@@ -732,7 +773,7 @@ pop_variable_scope (void)
       set = global_setlist.set;
       global_setlist.set = setlist->set;
       global_setlist.next = setlist->next;
-      global_setlist.next_is_parent = setlist->next_is_parent;
+      global_setlist.mark = setlist->mark;
     }
 
   /* Free the one we no longer need.  */
